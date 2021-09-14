@@ -14,8 +14,9 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o short ./services/short
 
 # Run stage
-FROM scratch
+FROM debian
 
 COPY --from=build /build/short /short
+COPY --from=build /build/static /static
 
 ENTRYPOINT ["/short"]
