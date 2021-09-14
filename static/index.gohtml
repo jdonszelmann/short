@@ -1,0 +1,266 @@
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Short</title>
+
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            background: #FEFAE0;
+
+            font-family: "Cantarell", serif;
+
+            font-size: large;
+        }
+
+        .content {
+            width: max(60%, 40em);
+            margin-left: auto;
+            margin-right: auto;
+
+            margin-top: 5em;
+        }
+
+        .box {
+            background: #606C38;
+            border-radius: 2em;
+            text-align: center;
+            padding: 4em;
+            color: white;
+            width: 100%;
+
+            box-sizing: border-box;
+
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+
+            margin-bottom: 1em;
+        }
+
+        form label {
+            margin-bottom: 1em;
+            margin-top: 1em;
+
+            display: flex;
+            flex-direction: row;
+            justify-content: center;
+        }
+
+        form label span {
+            width: 5em;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        input {
+            background: #283618;
+            border: none;
+            padding: 1em;
+            color: white;
+        }
+
+        .errors {
+            position: fixed;
+            right: 0;
+            bottom: 0;
+            margin: 1em;
+            display: flex;
+
+            flex-direction: column;
+            justify-content: end;
+
+            max-width: 48%;
+        }
+
+        .error {
+            background: #BC6C25;
+            padding: 1em;
+            text-align: center;
+            margin: 3px;
+            border-radius: 2px;
+        }
+
+        .error:hover {
+            transform: scale(1.1, 1.1);
+            cursor: pointer;
+        }
+
+        .logout {
+            background: #283618;
+            color: white;
+
+            padding: 1em;
+            text-align: center;
+            border-radius: 2px;
+
+            position: fixed;
+            left: 0;
+            bottom: 0;
+            margin: 1em;
+
+            max-width: 48%;
+        }
+
+        .logout:hover {
+            transform: scale(1.1, 1.1);
+            cursor: pointer;
+        }
+
+        button {
+            background: #283618;
+            color: white;
+            border: none;
+            padding: 1em;
+            width: 70%;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        button:hover {
+            transform: scale(1.1, 1.1);
+            cursor: pointer;
+        }
+
+
+        .alias {
+            display: flex;
+            flex-direction: row;
+            justify-content: space-between;
+
+            padding: 1em;
+        }
+
+        .aliaswrapper > :nth-child(1) {
+            border-top-left-radius: 1em;
+            border-top-right-radius: 1em;
+        }
+
+        .aliaswrapper > :last-child {
+            border-bottom-left-radius: 1em;
+            border-bottom-right-radius: 1em;
+        }
+
+        .aliaswrapper > :nth-child(2n) {
+            background: #566132;
+        }
+
+        .aliaswrapper > :nth-child(2n + 1) {
+            background: #515b2f;
+        }
+
+        .alias a {
+            color: deepskyblue !important;
+        }
+
+        .delete-alias {
+
+        }
+
+        .delete-alias:hover {
+            cursor: pointer;
+        }
+    </style>
+
+    <script>
+        async function logout() {
+            await fetch("__API__/logout", {
+                method: "POST",
+                credentials: 'include',
+            })
+            location.href = "/"
+        }
+
+        async function rmalias(alias) {
+            await fetch("__API__/rmalias", {
+                method: "POST",
+                credentials: 'include',
+                body: alias,
+            })
+            location.href = "/"
+        }
+    </script>
+</head>
+<body>
+    <div class="content">
+        {{if .User}}
+            <form action="/__API__/createalias" method="POST" class="box">
+                <h1>Shorten URL</h1>
+                <label>
+                    <span>Url</span>
+                    <input name="url" id="url" placeholder="https://google.com">
+                </label>
+                <label>
+                    <span>Alias</span>
+                    <input name="alias" id="alias" placeholder="google" value="{{.NonExistentRandom}}">
+                </label>
+                <button type="submit">Create Shortened Url</button>
+            </form>
+
+            <div class="box">
+                <h1>Aliases</h1>
+                <div class="aliaswrapper">
+                    {{$BaseUrl := .BaseUrl}}
+                    {{range .Aliases}}
+                        <div class="alias">
+                            {{$URL := printf "%s/%s" $BaseUrl .Alias}}
+
+                            <a href="http://{{$URL | url}}">
+                                {{html $URL}}
+                            </a>
+                            <span>{{.Url}}</span>
+                            <span class="delete-alias" onclick="rmalias({{.Alias}})">❌</span>
+                        </div>
+                    {{end}}
+                </div>
+            </div>
+
+            <form action="/__API__/changepw" method="POST" class="box">
+                <h1>Change password</h1>
+                <label>
+                    <span>Password</span>
+                    <input name="password" id="password" type="password">
+                </label>
+
+                <label>
+                    <span>Repeat</span>
+                    <input name="password-repeat" id="password-repeat" type="password">
+                </label>
+                <button type="submit">Change password</button>
+            </form>
+
+            <div class="logout" onclick="logout()">
+                Log Out
+            </div>
+        {{else}}
+            <form action="/__API__/login" method="POST" class="box">
+                <h1>Log In</h1>
+
+                <label>
+                    <span>Username</span>
+                    <input name="username" id="username">
+                </label>
+                <label>
+                    <span>Password</span>
+                    <input name="password" id="password" type="password">
+                </label>
+
+                <button type="submit">Log In</button>
+            </form>
+        {{end}}
+
+        <div class="errors">
+            {{range .Messages}}
+                <div class="error" onclick="this.style.display = 'none';">
+                    {{.}}
+                </div>
+            {{end}}
+        </div>
+    </div>
+</body>
+</html>
