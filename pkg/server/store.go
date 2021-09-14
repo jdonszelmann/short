@@ -19,8 +19,8 @@ type Store struct {
 	db *badger.DB
 }
 
-func NewStore() (*Store, error) {
-	db, err := badger.Open(badger.DefaultOptions("store.db"))
+func NewStore(location string) (*Store, error) {
+	db, err := badger.Open(badger.DefaultOptions(location))
 	if err != nil {
 		return nil, err
 	}

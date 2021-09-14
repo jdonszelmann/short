@@ -33,6 +33,18 @@ func sessionKey () []byte {
 	}
 }
 
+func dbLocation () string {
+	env := os.Getenv("DB_LOCATION")
+	if env == "" {
+		res := "store.db"
+		log.Printf("using %s as db location", res)
+
+		return res
+	} else {
+		return env
+	}
+}
+
 func baseUrl () string {
 	env := os.Getenv("BASE_URL")
 	if env == "" {
@@ -55,14 +67,7 @@ func StartServer() error {
 	gob.Register(SessionUser{})
 
 	sessionStore := sessions.NewCookieStore(sessionKey())
-	//sessionStore.Options = &sessions.Options{
-	//	Path:     "/",
-	//	Domain:   "",
-	//	MaxAge:   0,
-	//	Secure:   false,
-	//	HttpOnly: false,
-	//	SameSite: http.SameSiteLaxMode,
-	//}
+
 	funcMap := template.FuncMap{
 		"url": func(s string) template.URL {
 			return template.URL(s)
@@ -75,7 +80,7 @@ func StartServer() error {
 		return err
 	}
 
-	store, err := NewStore()
+	store, err := NewStore(dbLocation())
 	if err != nil {
 		return err
 	}
