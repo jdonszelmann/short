@@ -6,10 +6,13 @@ import (
 	"fmt"
 	"github.com/dgraph-io/badger"
 	"log"
+	"net/textproto"
 )
 
 const userPrefix = "user_"
 const aliasPrefix = "alias_"
+const filePrefix = "file_"
+
 
 func prefix(prefix string, key string) []byte {
 	return []byte(fmt.Sprintf("%s%s", prefix, key))
@@ -47,6 +50,13 @@ type Alias struct {
 	Owner string
 	Url   string
 	Alias string
+	Password []byte
+	File string
+}
+
+type File struct {
+	Data []byte
+	Mime textproto.MIMEHeader
 }
 
 func (s *Store) CreateUser(user User) error {
@@ -229,6 +239,135 @@ func (s Store) RmAlias(alias *Alias) error {
 	}
 
 	return s.db.Update(func(txn *badger.Txn) error {
+		err := s.RmAliasFiles(txn, alias.Alias)
+		if err != nil {
+			return err
+		}
+
 		return txn.Delete(prefix(aliasPrefix, alias.Alias))
 	})
+}
+
+func (s Store) GetUsers() ([]User, error) {
+	var res []User
+	return res, s.db.View(func(txn *badger.Txn) error {
+		it := txn.NewIterator(badger.DefaultIteratorOptions)
+		for it.Seek([]byte(userPrefix)); it.ValidForPrefix([]byte(userPrefix)); it.Next() {
+
+			var user User
+			err := it.Item().Value(func(val []byte) error {
+				return json.NewDecoder(bytes.NewBuffer(val)).Decode(&user)
+			})
+
+			if err != nil {
+				return err
+			}
+
+			res = append(res, user)
+		}
+
+		it.Close()
+
+		return nil
+	})
+}
+
+func (s Store) RmUser(name string) error {
+	return s.db.Update(func(txn *badger.Txn) error {
+		var user User
+		entry, err := txn.Get(prefix(userPrefix, name))
+		if err != nil {
+			return err
+		}
+
+		err = entry.Value(func(val []byte) error {
+			return json.NewDecoder(bytes.NewBuffer(val)).Decode(&user)
+		})
+		if err != nil {
+			return err
+		}
+
+		for _, alias := range user.Aliases {
+			err = s.RmAliasFiles(txn, alias)
+			if err != nil {
+				return err
+			}
+			err = txn.Delete(prefix(aliasPrefix, alias))
+			if err != nil {
+				return err
+			}
+		}
+
+		return txn.Delete(prefix(userPrefix, name))
+	})
+}
+
+func (s Store) SetAdmin(name string, value bool) error {
+	return s.db.Update(func(txn *badger.Txn) error {
+		var user User
+		entry, err := txn.Get(prefix(userPrefix, name))
+		if err != nil {
+			return err
+		}
+		err = entry.Value(func(val []byte) error {
+			return json.NewDecoder(bytes.NewBuffer(val)).Decode(&user)
+		})
+		if err != nil {
+			return err
+		}
+
+		user.Admin = value
+
+		var b bytes.Buffer
+		err = json.NewEncoder(&b).Encode(&user)
+		if err != nil {
+			return err
+		}
+
+		return txn.Set(prefix(userPrefix, user.Name), b.Bytes())
+	})
+}
+
+func (s Store) CreateFile(identifier string, f File) error {
+	return s.db.Update(func(txn *badger.Txn) error {
+		var b bytes.Buffer
+		err := json.NewEncoder(&b).Encode(&f)
+		if err != nil {
+			return err
+		}
+
+		return txn.Set(prefix(filePrefix, identifier), b.Bytes())
+	})
+}
+
+func (s Store) GetFile(identifier string) (*File, error) {
+	var res *File
+	return res, s.db.View(func(txn *badger.Txn) error {
+		entry, err := txn.Get(prefix(filePrefix, identifier))
+		if err != nil {
+			return err
+		}
+		return entry.Value(func(val []byte) error {
+			return json.NewDecoder(bytes.NewBuffer(val)).Decode(&res)
+		})
+	})
+}
+
+func (s Store) RmAliasFiles(txn *badger.Txn, aliasName string) error {
+	var alias *Alias
+	entry, err := txn.Get(prefix(aliasPrefix, aliasName))
+	if err == badger.ErrKeyNotFound {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	err = entry.Value(func(val []byte) error {
+		return json.NewDecoder(bytes.NewBuffer(val)).Decode(&alias)
+	})
+	if err != nil {
+		return err
+	}
+
+	return txn.Delete(prefix(filePrefix, alias.File))
 }

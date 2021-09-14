@@ -6,6 +6,8 @@
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title>Short</title>
 
+    <link rel="stylesheet" href="__API__/dropzone.css">
+
     <style>
         html, body {
             margin: 0;
@@ -127,48 +129,70 @@
             cursor: pointer;
         }
 
+        .dz-button:hover {
+            transform: scale(0, 0);
+        }
 
-        .alias {
+        .listitem {
             display: flex;
             flex-direction: row;
             justify-content: space-between;
 
             padding: 1em;
+            text-align: center;
         }
 
-        .aliaswrapper > :nth-child(1) {
+        .list > :nth-child(1) {
             border-top-left-radius: 1em;
             border-top-right-radius: 1em;
         }
 
-        .aliaswrapper > :last-child {
+        .list > :last-child {
             border-bottom-left-radius: 1em;
             border-bottom-right-radius: 1em;
         }
 
-        .aliaswrapper > :nth-child(2n) {
+        .list > :nth-child(2n) {
             background: #566132;
         }
 
-        .aliaswrapper > :nth-child(2n + 1) {
+        .list > :nth-child(2n + 1) {
             background: #515b2f;
         }
 
-        .alias a {
+        a {
             color: deepskyblue !important;
         }
 
-        .delete-alias {
-
+        .delete:hover {
+            cursor: pointer;
         }
 
-        .delete-alias:hover {
-            cursor: pointer;
+        .rmuser {
+            background: orangered;
+            margin-top: 1em;
+        }
+
+        .adduser {
+            background: #515b2f;
+            border-radius: 1em;
+            margin-top: .5em;
+            padding-bottom: .5em;
+        }
+
+        #preview {
+            display: flex;
+            flex-direction: row;
+            justify-content: center;
         }
     </style>
 
     <script>
         async function logout() {
+            if (typeof resetVerticalOffset !== undefined) {
+                resetVerticalOffset();
+            }
+
             await fetch("__API__/logout", {
                 method: "POST",
                 credentials: 'include',
@@ -184,13 +208,84 @@
             })
             location.href = "/"
         }
+
+        async function rmuser(name) {
+            if (confirm(`You are about to remove user ${name}. Are you sure?`)) {
+                await fetch("__API__/rmuser", {
+                    method: "POST",
+                    credentials: 'include',
+                    body: name,
+                })
+                location.href = "/"
+            }
+        }
+
+        async function setAdmin(name, value) {
+            await fetch("__API__/setadmin", {
+                method: "POST",
+                credentials: 'include',
+                body: JSON.stringify({name, value}),
+            })
+            location.href = "/"
+        }
     </script>
+
+    <script src="/__API__/dropzone.js"></script>
 </head>
 <body>
     <div class="content">
         {{if .User}}
-            <form action="/__API__/createalias" method="POST" class="box">
+            <script>
+                Dropzone.options.aliasform = {
+                    paramName: "file",
+                    previewsContainer: "#preview",
+                    maxFiles: 1,
+                    maxFilesize: 100 * 1024 * 1024,
+                    addRemoveLinks: true,
+                    init: function () {
+                        const that = this;
+
+                        let file = false;
+
+                        this.on("addedfile", _ => {
+                            console.log("added file")
+                            file = true;
+                            const elem = document.getElementById("url");
+                            elem.disabled = true;
+                            elem.placeholder = "disabled - using file as target"
+                        })
+                        this.on("removedfile", _ => {
+                            console.log("removed file")
+                            file = false;
+                            const elem = document.getElementById("url");
+                            elem.disabled = false;
+                            elem.placeholder = "https://google.com";
+                        })
+
+                        document.getElementById('alias-submit').addEventListener("click", function (e) {
+                            if (file) {
+                                e.preventDefault();
+                                that.processQueue();
+                            }
+                        });
+
+                        this.on('sending', function(file, xhr, formData) {
+                            formData.append("url", document.getElementById('url').value);
+                            formData.append("alias", document.getElementById('alias').value);
+                            formData.append("password", document.getElementById('alias-password').value);
+                        });
+
+                        this.on("complete", _ => {
+                            location.href = "/"
+                        })
+                    },
+
+                    autoProcessQueue: false,
+                };
+            </script>
+            <form action="/__API__/createalias" method="POST" class="box dropzone" id="aliasform" enctype="multipart/form-data">
                 <h1>Shorten URL</h1>
+
                 <label>
                     <span>Url</span>
                     <input name="url" id="url" placeholder="https://google.com">
@@ -199,40 +294,104 @@
                     <span>Alias</span>
                     <input name="alias" id="alias" placeholder="google" value="{{.NonExistentRandom}}">
                 </label>
-                <button type="submit">Create Shortened Url</button>
+                <label>
+                    <span>Password</span>
+                    <input name="password" id="alias-password" placeholder="leave empty for no password" type="password" autocomplete="new-password">
+                </label>
+
+                <p>
+                    With password authentication, basic authentication is used. Usually basic authentication
+                    works with usernames and passwords, however the password can be left empty by users of the shortened url.
+                </p>
+                <div id="preview"></div>
+                <button type="submit" id="alias-submit">Create Shortened Url</button>
             </form>
 
             <div class="box">
                 <h1>Aliases</h1>
-                <div class="aliaswrapper">
+                <div class="list">
                     {{$BaseUrl := .BaseUrl}}
                     {{range .Aliases}}
-                        <div class="alias">
+                        <div class="listitem">
                             {{$URL := printf "%s/%s" $BaseUrl .Alias}}
 
                             <a href="http://{{$URL | url}}">
                                 {{html $URL}}
                             </a>
-                            <span>{{.Url}}</span>
-                            <span class="delete-alias" onclick="rmalias({{.Alias}})">❌</span>
+                            {{if eq .File "" }}
+                                <span>{{.Url}}</span>
+                            {{else}}
+                                <span>{{.File | filename}}</span>
+                            {{end}}
+                            <span class="delete" onclick="rmalias({{.Alias}})">❌</span>
                         </div>
+                    {{else}}
+                        <span style="background: transparent">You have made no shortened urls yet</span>
                     {{end}}
                 </div>
             </div>
 
-            <form action="/__API__/changepw" method="POST" class="box">
-                <h1>Change password</h1>
-                <label>
-                    <span>Password</span>
-                    <input name="password" id="password" type="password">
-                </label>
+            <div class="box">
+                <h1>Account</h1>
+                <form action="/__API__/changepw" method="POST" >
+                    <label>
+                        <span>Password</span>
+                        <input name="password" id="password" type="password">
+                    </label>
 
-                <label>
-                    <span>Repeat</span>
-                    <input name="password-repeat" id="password-repeat" type="password">
-                </label>
-                <button type="submit">Change password</button>
-            </form>
+                    <label>
+                        <span>Repeat</span>
+                        <input name="password-repeat" id="password-repeat" type="password">
+                    </label>
+                    <button type="submit">Change password</button>
+                </form>
+
+                <button onclick="rmuser({{.User.Name}})" class="rmuser">Remove Account</button>
+            </div>
+
+            {{if .User.Admin }}
+                <div class="box">
+                    <h1>Users</h1>
+                    <div class="list">
+                        <div class="listitem">
+                            <span style="width: 10em">Name</span>
+                            <span>Admin</span>
+                            <span>Delete</span>
+                        </div>
+                        {{range .Users}}
+                            <div class="listitem">
+                                <span style="width: 10em">{{.Name}}</span>
+                                <div>
+                                    {{ if .Admin }}
+                                        <input name="admin" id="admin" type="checkbox" checked onchange="setAdmin({{.Name}}, false)">
+                                    {{ else }}
+                                        <input name="admin" id="admin" type="checkbox" onchange="setAdmin({{.Name}}, true)"`>
+                                    {{end}}
+                                </div>
+
+                                <span class="delete" onclick="rmuser({{.Name}})">❌</span>
+                            </div>
+                        {{end}}
+                    </div>
+
+                    <form class="adduser" action="/__API__/createuser" method="POST">
+                        <h2>Add User</h2>
+                        <label>
+                            <span>Username</span>
+                            <input name="username" id="username" type="text" autocomplete="new-username">
+                        </label>
+                        <label>
+                            <span>Initial Password</span>
+                            <input name="password" id="password" type="text" value="{{.RandomPassword}}" readonly onclick="this.focus(); this.select()">
+                        </label>
+                        <label>
+                            <span>Admin</span>
+                            <input name="admin" id="admin" type="checkbox">
+                        </label>
+                        <button type="submit">Create user</button>
+                    </form>
+                </div>
+            {{end}}
 
             <div class="logout" onclick="logout()">
                 Log Out
@@ -262,5 +421,39 @@
             {{end}}
         </div>
     </div>
+
+    {{if .User}}
+        <script>
+            const recordVerticalOffset = () => {
+                localStorage.setItem('pageVerticalPosition', window.scrollY);
+            }
+
+            const resetVerticalOffset = () => {
+                localStorage.removeItem('pageVerticalPosition');
+            }
+
+            let interval = null;
+            const throttleScroll = () => {
+                if (interval !== null) {
+                    clearTimeout(interval)
+                }
+
+                interval = setTimeout(() => {
+                    recordVerticalOffset()
+                }, 10)
+            }
+
+            window.addEventListener('scroll', throttleScroll);
+
+            const repositionPage = () => {
+
+                let pageVerticalPosition = localStorage.getItem('pageVerticalPosition') || 0;
+
+                window.scrollTo(0, pageVerticalPosition);
+            }
+
+            window.addEventListener('load', repositionPage);
+        </script>
+    {{end}}
 </body>
 </html>

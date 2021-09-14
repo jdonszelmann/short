@@ -1,6 +1,7 @@
 package server
 
 import (
+	"github.com/dgraph-io/badger"
 	"golang.org/x/crypto/bcrypt"
 	"log"
 )
@@ -24,7 +25,7 @@ func NewLoginManager(store *Store) (*LoginManager, error) {
 			Password: []byte(RandSeq(20)),
 			Admin: true,
 		}
-		err := res.CreateUser(u)
+		_, err := res.CreateUser(u)
 		if err != nil {
 			return nil, err
 		}
@@ -62,14 +63,20 @@ func (lm LoginManager) LoggedIn(su SessionUser) (*User, error) {
 	return &user, nil
 }
 
-func (lm LoginManager) CreateUser(user User) error {
-	var err error
-	user.Password, err = bcrypt.GenerateFromPassword(user.Password, bcrypt.DefaultCost)
-	if err != nil {
-		return err
+func (lm LoginManager) CreateUser(user User) (bool, error) {
+	_, err := lm.store.GetUser(user.Name)
+	if err != nil && err != badger.ErrKeyNotFound {
+		return false, err
+	} else if err == nil {
+		return true, nil
 	}
 
-	return lm.store.CreateUser(user)
+	user.Password, err = bcrypt.GenerateFromPassword(user.Password, bcrypt.DefaultCost)
+	if err != nil {
+		return false, err
+	}
+
+	return false, lm.store.CreateUser(user)
 }
 
 func (lm LoginManager) ChangePassword(user User, password string) error {
@@ -79,4 +86,8 @@ func (lm LoginManager) ChangePassword(user User, password string) error {
 		return err
 	}
 	return lm.store.CreateUser(user)
+}
+
+func (lm LoginManager) SetAdmin(name string, value bool) error {
+	return lm.store.SetAdmin(name, value)
 }
